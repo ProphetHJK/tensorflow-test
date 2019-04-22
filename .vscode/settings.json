@@ -1,0 +1,9 @@
+{
+    "python.linting.pylintEnabled": true,
+    "python.pythonPath": "C:\\ProgramData\\Anaconda3\\python.exe",
+     "python.autoComplete.extraPaths": [
+            "C:\\ProgramData\\Anaconda3\\Lib\\site-packages\\tensorflow",
+            "C:\\ProgramData\\Anaconda3\\Scripts",
+     ],
+    "python.autoComplete.addBrackets": true,
+}
