@@ -128,7 +128,7 @@ def inference(images):
                            strides=[1, 2, 2, 1],
                            padding='SAME', name='pool2')
 
-    #第三层 全连接层
+    # 第三层 全连接层
     with tf.variable_scope('local3') as scope:
         # 全部拉直,
         reshape = tf.keras.layers.Flatten()(pool2)
@@ -162,7 +162,7 @@ def inference(images):
 
 
 def loss(logits, labels):
-    """加入L2Loss"""
+    """损失计算，加入L2Loss"""
 
     # 计算交叉熵
     labels = tf.cast(labels, tf.int64)
@@ -178,7 +178,7 @@ def loss(logits, labels):
 
 def _add_loss_summaries(total_loss):
     """加入图形界面，等待注释"""
-    #滑动平均
+    #滑动平均，decay为0.9
     loss_averages = tf.train.ExponentialMovingAverage(0.9, name='avg')
     losses = tf.get_collection('losses')
     loss_averages_op = loss_averages.apply(losses + [total_loss])
@@ -210,13 +210,30 @@ def train(total_loss, global_step):
                                     staircase=True)
     tf.summary.scalar('learning_rate', lr)
 
-    #生成所有损失的滑动平均值和相关的摘要，需要注释
+    # 生成所有损失的滑动平均值和相关的摘要，需要注释
     loss_averages_op = _add_loss_summaries(total_loss)
 
-    #使用优化器，需要注释
+    # 使用梯度下降优化器，需要注释
+    # 每次都要先更新影子变量，这里是losses
     with tf.control_dependencies([loss_averages_op]):
         opt = tf.train.GradientDescentOptimizer(lr)
+        # 计算梯度
         grads = opt.compute_gradients(total_loss)
+    # 应用梯度，可以直接使用opt.minimize()取代compute_greadients()和apply_gradients()
     apply_gradient_op = opt.apply_gradients((grads, global_step))
 
     # 为可训练变量创建直方图
+    for var in tf.trainable_variables():
+        tf.summary.histogram(var.op.name, var)
+
+    # 梯度直方图
+    for grad, var in grads:
+        if grad is not None:
+            tf.summary.histogram(var.op.name + '/gradients', grad)
+
+    # 跟踪所有变量的滑动平均值
+    variable_averages = tf.train.ExponentialMovingAverage(MOVING_AVERAGE_DECAY, global_step)
+    with tf.control_dependencies([apply_gradient_op]):
+        # 应用一次滑动
+        variable_averages_op = variable_averages.apply(tf.trainable_variables)
+    return variable_averages_op
