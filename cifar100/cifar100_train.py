@@ -64,7 +64,7 @@ def train():
                     print(format_str % (datetime.now(), self._step, loss_value,
                                         examples_per_sec, sec_per_batch))
         with tf.train.MonitoredTrainingSession(
-            checkpoint_dir=FLAGS.train_diar,
+            checkpoint_dir=FLAGS.train_dir,
             # 设置训练的一些条件
             hooks=[tf.train.StopAtStepHook(last_step=FLAGS.max_steps),
                    tf.train.NanTensorHook(loss),
@@ -76,10 +76,10 @@ def train():
 
 
 def main(argv=None):
-    if tf.gfile.Exists(FLAGS.train_diar):
+    if tf.gfile.Exists(FLAGS.train_dir):
         # 递归删除文件夹
-        tf.gfile.DeleteRecursively(FLAGS.train_diar)
-    tf.gfile.MakeDirs(FLAGS.train_diar)
+        tf.gfile.DeleteRecursively(FLAGS.train_dir)
+    tf.gfile.MakeDirs(FLAGS.train_dir)
     train()
 
 

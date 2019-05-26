@@ -45,7 +45,7 @@ class DataPreprocessor(object):
 def _get_images_labels(batch_size, split, distords=False):
     """获取标签信息，返回dataset"""
     # 导入tfds支持的数据集,split为拆分方式
-    dataset = tf.load(name='cifar100', split=split)
+    dataset = tfds.load(name='cifar100', split=split)
     scope = 'data_augmentation' if distords else 'input'
     # 等待注释补充
     with tf.name_scope(scope):
