@@ -1,8 +1,23 @@
+# Copyright 2015 The TensorFlow Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-#正则表达式
+# 正则表达式
 import re
 
 import tensorflow as tf
@@ -24,13 +39,15 @@ NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = cifar100_input.NUM_EXAMPLES_PER_EPOCH_FOR_TRA
 NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = cifar100_input.NUM_EXAMPLES_PER_EPOCH_FOR_EVAL
 
 # 定义训练时的参数
-MOVING_AVERAGE_DECAY = 0.9999     # 滑动平均衰减.
-NUM_EPOCHS_PER_DECAY = 350.0      # 多少轮数后学习率衰减.
-LEARNING_RATE_DECAY_FACTOR = 0.1  # 衰减因子 等待注释补充.
-INITIAL_LEARNING_RATE = 0.1       # 初始学习率
+MOVING_AVERAGE_DECAY = 0.9999  # 滑动平均衰减.
+NUM_EPOCHS_PER_DECAY = 10.0  # 多少轮数后学习率衰减.
+LEARNING_RATE_DECAY_FACTOR = 0.96  # 衰减因子 等待注释补充.
+INITIAL_LEARNING_RATE = 0.1  # 初始学习率
+learning_rate = 0
 
 # 多GPU情况，等待注释补充
 TOWER_NAME = 'tower'
+
 
 def _activation_summary(x):
     """可视化相关，等待注释补充"""
@@ -71,7 +88,7 @@ def destorted_inputs():
 
 
 def inputs(eval_data):
-    """导入验证数据"""
+    """导入测试数据"""
     images, labels = cifar100_input.inputs(eval_data=eval_data, batch_size=FLAGS.batch_size)
 
     if FLAGS.use_fp16:
@@ -94,7 +111,7 @@ def inference(images):
                                              stddev=5e-2,
                                              wd=None)
         conv = tf.nn.conv2d(images, kernel, [1, 1, 1, 1], padding='SAME')
-        biases = _variable_on_cpu('biases', [64], tf.constant_initializer(0, 0))
+        biases = _variable_on_cpu('biases', [64], tf.constant_initializer(0.0))
         pre_activation = tf.nn.bias_add(conv, biases)
         # 使用relu激活函数去线性化
         conv1 = tf.nn.relu(pre_activation, name=scope.name)
@@ -114,14 +131,14 @@ def inference(images):
                                              stddev=5e-2,
                                              wd=None)
         conv = tf.nn.conv2d(images, kernel, [1, 1, 1, 1], padding='SAME')
-        biases = _variable_on_cpu('biases', [64], tf.constant_initializer(0, 0))
+        biases = _variable_on_cpu('biases', [64], tf.constant_initializer(0.1))
         pre_activation = tf.nn.bias_add(conv, biases)
         # 使用relu激活函数去线性化
         conv2 = tf.nn.relu(pre_activation, name=scope.name)
         _activation_summary(conv2)
 
     # 局部响应归一化
-    norm2 = tf.nn.lrn(conv2, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.5,
+    norm2 = tf.nn.lrn(conv2, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75,
                       name='norm2')
     # 第二轮池化
     pool2 = tf.nn.max_pool(norm2, ksize=[1, 3, 3, 1],
@@ -134,7 +151,6 @@ def inference(images):
         reshape = tf.keras.layers.Flatten()(pool2)
         # 获取tensor的shape长度,此处长度为2304
         dim = reshape.get_shape()[1].value
-        print(dim)
         weights = _variable_with_weight_decay('weights', shape=[dim, 384],
                                               stddev=0.04, wd=0.004)
         biases = _variable_on_cpu('biases', [384], tf.constant_initializer(0.1))
@@ -149,12 +165,13 @@ def inference(images):
         local4 = tf.nn.relu(tf.matmul(local3, weights) + biases, name=scope.name)
         _activation_summary(local4)
 
-    # 此处并未使用tf.nn.sparse_softmax_cross_entropy_with_logits因为该函数接受
+    # 此处并未进行归一化，因为tf.nn.sparse_softmax_cross_entropy_with_logits函数接受
     # 未经缩放的logits,换句话说该函数能在内部实现缩放操作
     with tf.variable_scope('softmax_linear') as scope:
         weights = _variable_with_weight_decay('weights', [192, NUM_CLASSES],
-                                              stddev=1/192.0, wd=None)
-        biases = _variable_on_cpu('biases', [NUM_CLASSES])
+                                              stddev=1 / 192.0, wd=None)
+        biases = _variable_on_cpu('biases', [NUM_CLASSES],
+                                  tf.constant_initializer(0.0))
         softmax_linear = tf.add(tf.matmul(local4, weights), biases, name=scope.name)
         _activation_summary(softmax_linear)
 
@@ -178,7 +195,7 @@ def loss(logits, labels):
 
 def _add_loss_summaries(total_loss):
     """加入图形界面，等待注释"""
-    #滑动平均，decay为0.9
+    # 滑动平均，decay为0.9
     loss_averages = tf.train.ExponentialMovingAverage(0.9, name='avg')
     losses = tf.get_collection('losses')
     loss_averages_op = loss_averages.apply(losses + [total_loss])
@@ -199,7 +216,7 @@ def train(total_loss, global_step):
 
     # 一轮中的batch数量，也就是一轮训练步数，训练完一个batch为一步
     num_batches_per_epoch = NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN / FLAGS.batch_size
-    # 衰减学习率所需训练步数
+    # 衰减学习率所需训练步数, 390.625*num_batches_per_epoch
     decay_steps = int(num_batches_per_epoch * NUM_EPOCHS_PER_DECAY)
 
     # 根据步数衰减学习率(learning rate),需要修改staitcase为False
@@ -210,17 +227,19 @@ def train(total_loss, global_step):
                                     staircase=True)
     tf.summary.scalar('learning_rate', lr)
 
-    # 生成所有损失的滑动平均值和相关的摘要，需要注释
+    # 生成所有损失的滑动平均值和相关的摘要，此处为什么会需要维护一个
+    # 单独的total_loss的影子变量需要注释，可能是为了使最后的曲线较为平滑
     loss_averages_op = _add_loss_summaries(total_loss)
 
     # 使用梯度下降优化器，需要注释
     # 每次都要先更新影子变量，这里是losses
     with tf.control_dependencies([loss_averages_op]):
         opt = tf.train.GradientDescentOptimizer(lr)
+
         # 计算梯度
         grads = opt.compute_gradients(total_loss)
     # 应用梯度，可以直接使用opt.minimize()取代compute_greadients()和apply_gradients()
-    apply_gradient_op = opt.apply_gradients((grads, global_step))
+    apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
 
     # 为可训练变量创建直方图
     for var in tf.trainable_variables():
@@ -231,9 +250,12 @@ def train(total_loss, global_step):
         if grad is not None:
             tf.summary.histogram(var.op.name + '/gradients', grad)
 
-    # 跟踪所有变量的滑动平均值
+    # 跟踪所有变量的滑动平均值，此时所有变量都不是影子变量，影子变量将会保存起来，在测试数据的时候加载
     variable_averages = tf.train.ExponentialMovingAverage(MOVING_AVERAGE_DECAY, global_step)
     with tf.control_dependencies([apply_gradient_op]):
         # 应用一次滑动
-        variable_averages_op = variable_averages.apply(tf.trainable_variables)
-    return variable_averages_op
+        variables_averages_op = variable_averages.apply(tf.trainable_variables())
+    return variables_averages_op
+
+
+

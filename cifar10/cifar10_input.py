@@ -39,6 +39,7 @@ def _get_images_labels(batch_size, split, distords=False):
   scope = 'data_augmentation' if distords else 'input'
   with tf.name_scope(scope):
     dataset = dataset.map(DataPreprocessor(distords), num_parallel_calls=10)
+    print(dataset)
   # Dataset is small enough to be fully loaded on memory:
   dataset = dataset.prefetch(-1)
   dataset = dataset.repeat().batch(batch_size)
