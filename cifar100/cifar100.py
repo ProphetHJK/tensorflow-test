@@ -29,6 +29,8 @@ FLAGS = tf.app.flags.FLAGS
 # 定义了运行时的控制台参数
 tf.app.flags.DEFINE_integer('batch_size', 128,
                             """batch的大小""")
+tf.app.flags.DEFINE_integer('batch_size_one', 1,
+                            """batch大小为1""")
 tf.app.flags.DEFINE_boolean('use_fp16', False,
                             """是否使用fp16.""")
 
@@ -43,7 +45,6 @@ MOVING_AVERAGE_DECAY = 0.9999  # 滑动平均衰减.
 NUM_EPOCHS_PER_DECAY = 10.0  # 多少轮数后学习率衰减.
 LEARNING_RATE_DECAY_FACTOR = 0.96  # 衰减因子 等待注释补充.
 INITIAL_LEARNING_RATE = 0.1  # 初始学习率
-learning_rate = 0
 
 # 多GPU情况，等待注释补充
 TOWER_NAME = 'tower'
@@ -96,6 +97,14 @@ def inputs(eval_data):
         labels = tf.cast(labels, tf.float16)
     return images, labels
 
+def single_inputs(eval_data):
+    """导入单张图片"""
+    images, labels = cifar100_input.inputs(eval_data=eval_data, batch_size=FLAGS.batch_size_one)
+
+    if FLAGS.use_fp16:
+        images = tf.cast(images, tf.float16)
+        labels = tf.cast(labels, tf.float16)
+    return images, labels
 
 def inference(images):
     """建立模型

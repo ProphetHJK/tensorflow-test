@@ -77,7 +77,7 @@ def train():
                                   'sec/batch)')
 
                     print(format_str % (datetime.now(), self._step, loss_value,
-                                        examples_per_sec, sec_per_batch))
+                                         examples_per_sec, sec_per_batch))
 
         with tf.train.MonitoredTrainingSession(
                 checkpoint_dir=FLAGS.train_dir,
