@@ -27,10 +27,10 @@ import cifar100_input
 FLAGS = tf.app.flags.FLAGS
 
 # 定义了运行时的控制台参数
-tf.app.flags.DEFINE_integer('batch_size', 128,
+tf.app.flags.DEFINE_integer('batch_size', 256,
                             """batch的大小""")
 tf.app.flags.DEFINE_integer('batch_size_one', 1,
-                            """batch大小为1""")
+                            """batch大小为1的情况""")
 tf.app.flags.DEFINE_boolean('use_fp16', False,
                             """是否使用fp16.""")
 
@@ -42,8 +42,8 @@ NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = cifar100_input.NUM_EXAMPLES_PER_EPOCH_FOR_EVAL
 
 # 定义训练时的参数
 MOVING_AVERAGE_DECAY = 0.9999  # 滑动平均衰减.
-NUM_EPOCHS_PER_DECAY = 10.0  # 多少轮数后学习率衰减.
-LEARNING_RATE_DECAY_FACTOR = 0.96  # 衰减因子 等待注释补充.
+NUM_EPOCHS_PER_DECAY = 20.0  # 多少轮数后学习率衰减.
+LEARNING_RATE_DECAY_FACTOR = 0.95  # 衰减因子 用于在梯度下降时决定学习率的衰减幅度，越小幅度越大.
 INITIAL_LEARNING_RATE = 0.1  # 初始学习率
 
 # 多GPU情况，等待注释补充
@@ -130,16 +130,16 @@ def inference(images):
                            strides=[1, 2, 2, 1],
                            padding='SAME', name='pool1')
     # 局部响应归一化
-    norm1 = tf.nn.lrn(pool1, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.5,
+    norm1 = tf.nn.lrn(pool1, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75,
                       name='norm1')
 
     with tf.variable_scope('conv2') as scope:
         # 生成64层5*5*3的卷积核
         kernel = _variable_with_weight_decay('weights',
-                                             shape=[5, 5, 3, 64],
+                                             shape=[5, 5, 64, 64],
                                              stddev=5e-2,
                                              wd=None)
-        conv = tf.nn.conv2d(images, kernel, [1, 1, 1, 1], padding='SAME')
+        conv = tf.nn.conv2d(norm1, kernel, [1, 1, 1, 1], padding='SAME')
         biases = _variable_on_cpu('biases', [64], tf.constant_initializer(0.1))
         pre_activation = tf.nn.bias_add(conv, biases)
         # 使用relu激活函数去线性化
@@ -154,10 +154,31 @@ def inference(images):
                            strides=[1, 2, 2, 1],
                            padding='SAME', name='pool2')
 
+    with tf.variable_scope('conv3') as scope:
+        # 生成64层5*5*3的卷积核
+        kernel = _variable_with_weight_decay('weights',
+                                             shape=[5, 5, 64, 128],
+                                             stddev=5e-2,
+                                             wd=None)
+        conv = tf.nn.conv2d(pool2, kernel, [1, 1, 1, 1], padding='SAME')
+        biases = _variable_on_cpu('biases', [128], tf.constant_initializer(0.1))
+        pre_activation = tf.nn.bias_add(conv, biases)
+        # 使用relu激活函数去线性化
+        conv3 = tf.nn.relu(pre_activation, name=scope.name)
+        _activation_summary(conv3)
+
+    # 局部响应归一化
+    norm3 = tf.nn.lrn(conv3, 4, bias=1.0, alpha=0.001 / 9.0, beta=0.75,
+                      name='norm2')
+    # 第二轮池化
+    pool3 = tf.nn.max_pool(norm3, ksize=[1, 3, 3, 1],
+                           strides=[1, 2, 2, 1],
+                           padding='SAME', name='pool3')
+
     # 第三层 全连接层
     with tf.variable_scope('local3') as scope:
         # 全部拉直,
-        reshape = tf.keras.layers.Flatten()(pool2)
+        reshape = tf.keras.layers.Flatten()(pool3)
         # 获取tensor的shape长度,此处长度为2304
         dim = reshape.get_shape()[1].value
         weights = _variable_with_weight_decay('weights', shape=[dim, 384],

@@ -21,9 +21,9 @@ import tensorflow as tf
 import tensorflow_datasets as tfds  # tensorflow官方数据集模块
 
 # 将导入图像处理成的大小
-IMAGE_SIZE = 24
+IMAGE_SIZE = 27
 
-NUM_CLASSES = 100  # CIFAR100拥有100个类别
+NUM_CLASSES = 20  # CIFAR100拥有100个类别
 # 训练集50000张，验证集10000张
 NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 50000
 NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 10000
@@ -33,7 +33,6 @@ def _get_images_labels(batch_size, split, distords=False):
     """获取标签信息，返回dataset"""
     # 导入tfds支持的数据集,split为拆分方式
     dataset = tfds.load(name='cifar100', split=split)
-    print(dataset)
     scope = 'data_augmentation' if distords else 'input'
     # 等待注释补充
     with tf.name_scope(scope):
@@ -75,7 +74,7 @@ class DataPreprocessor(object):
             img = tf.image.resize_image_with_crop_or_pad(img, IMAGE_SIZE, IMAGE_SIZE)
         # 标准化图像，便于后面的梯度下降提取特征，(x - mean) / adjusted_stddev等待注释补充，
         img = tf.image.per_image_standardization(img)
-        return dict(input=img, target=record['label'])
+        return dict(input=img, target=record['coarse_label'])
 
 
 def inputs(eval_data, batch_size):

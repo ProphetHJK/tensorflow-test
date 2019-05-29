@@ -34,6 +34,8 @@ tf.app.flags.DEFINE_boolean('log_device_placement', False,
                             """Whether to log device placement.""")
 tf.app.flags.DEFINE_integer('log_frequency', 10,
                             """How often to log results to the console.""")
+tf.app.flags.DEFINE_boolean('load_checkpoint', True,
+                            """是否加载检查点继续训练""")
 
 
 def train():
@@ -77,25 +79,38 @@ def train():
                                   'sec/batch)')
 
                     print(format_str % (datetime.now(), self._step, loss_value,
-                                         examples_per_sec, sec_per_batch))
+                                        examples_per_sec, sec_per_batch))
 
+        config = tf.ConfigProto(log_device_placement=FLAGS.log_device_placement)
+        config.gpu_options.allocator_type = 'BFC'  # 使用BFC算法
+        config.gpu_options.per_process_gpu_memory_fraction = 0.5  # 程序最多只能占用指定gpu50%的显存
+        config.gpu_options.allow_growth = True  # 程序按需申请内存
+        # MonitoredTrainingSession是一个方便的tensorflow会话初始化/恢复器,
+        # 也可用于分布式训练
         with tf.train.MonitoredTrainingSession(
+                # 加载保存的训练状态的目录，如为空则设为保存目录
                 checkpoint_dir=FLAGS.train_dir,
-                # 设置训练的一些条件
+                # 保存间隔
+                save_checkpoint_secs=None,
+                save_checkpoint_steps=10000,
+                # 可选的SessionRunHook对象列表
+                # StopAtStepHook表示停止步数
+                # NanTensorHook表示当loss为None时返回异常并停止训练
                 hooks=[tf.train.StopAtStepHook(last_step=FLAGS.max_steps),
                        tf.train.NanTensorHook(loss),
                        _LoggerHook()],
-                config=tf.ConfigProto(
-                    log_device_placement=FLAGS.log_device_placement)) as mon_sess:
+                config=config) as mon_sess:
+
             while not mon_sess.should_stop():
                 mon_sess.run(train_op)
 
 
 def main(argv=None):
-    if tf.gfile.Exists(FLAGS.train_dir):
-        # 递归删除文件夹
-        tf.gfile.DeleteRecursively(FLAGS.train_dir)
-    tf.gfile.MakeDirs(FLAGS.train_dir)
+    if not FLAGS.load_checkpoint:
+        if tf.gfile.Exists(FLAGS.train_dir):
+            # 递归删除文件夹
+            tf.gfile.DeleteRecursively(FLAGS.train_dir)
+        tf.gfile.MakeDirs(FLAGS.train_dir)
     train()
 
 
