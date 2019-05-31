@@ -16,11 +16,19 @@ IMAGE_SIZE = 27
 
 def evaluate_images(images):  # 执行验证
     logits = cifar100.inference(images)
-    #load_trained_model(logits)
     return logits
 
+
 def mkdir_and_copy(pathname, filename):
-    """将文件复制到目标文件夹"""
+    """将文件复制到新文件夹种.
+
+    Args:
+        pathname: string, 目标文件夹.
+        filename: string, 源文件名，在Flags.test_dir下的文件.
+
+    Returns:
+
+    """
     path = os.path.join(FLAGS.test_dir, pathname)
     folder = os.path.exists(path)
     if not folder:
@@ -55,7 +63,17 @@ def load_trained_model(logits, image_name_list, batch_size):
 
 
 def img_reader(folder):
-    """导出图片的路径列表"""
+    """从文件夹读取图片信息.
+
+    Args:
+        folder: string, 图片存放目录.
+
+    Returns:
+        images_path_list: list, 图片绝对路径列表
+        images_name_list: list, 图片名字列表
+        size: int, 列表的大小
+
+    """
     file_list = os.listdir(folder)
     images_path_list = []
     images_name_list =[]
@@ -70,7 +88,14 @@ def img_reader(folder):
 
 
 def img_processer(image_name_list):
-    """将图片处理成tensor"""
+    """将图片名字列表导入Datasets，并处理图片为tensor.
+
+    Args:
+        image_name_list: string, 图片名字列表.
+
+    Returns:
+        images: Images. 4D tensor of [1, IMAGE_SIZE, IMAGE_SIZE, 3] size.
+    """
     images = tf.cast(image_name_list, tf.string)
     # 创建dataset，保存所有图片的路径
     input_queue = tf.data.Dataset.from_tensor_slices(images)
@@ -85,9 +110,10 @@ def img_processer(image_name_list):
     width = IMAGE_SIZE
     # image = tf.image.central_crop(image_data, central_fraction=0.7)
     # image = tf.image.resize_image_with_crop_or_pad(image_data, IMAGE_SIZE, IMAGE_SIZE)
-    # 标准化图像，便于后面的梯度下降提取特征，(x - mean) / adjusted_stddev等待注释补充，
+    # 标准化图像，便于后面提取特征，(x - mean) / adjusted_stddev等待注释补充，
     #image = tf.image.resize_image_with_pad(image)
     images = tf.image.resize_images(images, (height, width), method=ResizeMethod.BILINEAR)
+    # 标准化图像，便于后面提取特征，(x - mean) / adjusted_stddev等待注释补充，
     images = tf.image.per_image_standardization(images)
     # image = tf.expand_dims(image, -1)
 
